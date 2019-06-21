@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">ActivityRecognition</string>
+    <string name="mobilenet">MobileNet</string>
+    <string name="camera_request_rationale">App requires camera access</string>
+    <string name="gpu">GPU</string>
+    <string name="cpu">CPU</string>
+    <string name="nnapi">NNAPI</string>
+    <string name="mobilenetV1Float">MobileNet</string>
+    <string name="modelLabel">Model</string>
+    <string name="deviceLabel">Device</string>
+    <string name="vgg16Float">VGG16</string>
+    <string name="vgg19Float">VGG19</string>
+    <string name="resnet50Float">ResNet50</string>
+    <string name="densenet169Float">DenseNet169</string>
+    <string name="threads">Threads</string>
+    <string name="help">Help</string>
+    <string name="about">About</string>
+    <string name="external_request_rationale">Access to external storage is required</string>
+</resources>
