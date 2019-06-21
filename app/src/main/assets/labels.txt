@@ -1,0 +1,8 @@
+Still
+Walk
+Run
+Bike
+Car
+Bus
+Train
+Subway
