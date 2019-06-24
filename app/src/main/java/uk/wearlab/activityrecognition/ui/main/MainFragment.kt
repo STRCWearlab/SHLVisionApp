@@ -2,6 +2,7 @@ package uk.wearlab.activityrecognition.ui.main
 
 import android.Manifest
 import android.content.Context
+import android.content.DialogInterface
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.SurfaceTexture
@@ -10,6 +11,7 @@ import android.net.Uri
 import android.os.*
 import android.support.v4.app.Fragment
 import android.support.v4.content.FileProvider
+import android.support.v7.app.AlertDialog
 import android.util.Log
 import android.view.*
 import pub.devrel.easypermissions.AfterPermissionGranted
@@ -45,6 +47,8 @@ class MainFragment : Fragment() {
     private var batteryPctTo = -1.0f
 
     // Write to file elements
+    private var counter = 0
+    private var seconds = 120L
     private val dirname = "wearlab"
     private var dirPath: File? = null
     private var file: File? = null
@@ -55,10 +59,12 @@ class MainFragment : Fragment() {
     private lateinit var np: NumberPicker
     private lateinit var deviceView: ListView
     private lateinit var modelView: ListView
+    private var counterView: EditText? = null
+    private var secondsView: EditText? = null
 
     /** Current indices of device and model.  */
     private var combinationIndex = 0
-    private val nThreads = 10
+    private val nThreads = 8
     private var currentDevice = -1
     private var currentModel = -1
     private var currentNumThreads = -1
@@ -203,6 +209,36 @@ class MainFragment : Fragment() {
             level / scale.toFloat()
         }
 
+        // Action button for saving parameters
+        val fab: View = view.findViewById(R.id.floatingActionButton)
+        val alertDialog: AlertDialog? = activity?.let {
+            val builder = AlertDialog.Builder(it)
+            builder.setView(layoutInflater.inflate(R.layout.save_dialog, null))
+                .setPositiveButton("Ok") { dialog, id ->
+                    // User clicked OK button, change the values from the fields
+                    val sender = dialog as AlertDialog
+                    counterView = sender.findViewById(R.id.counter)
+                    secondsView = sender.findViewById(R.id.seconds)
+                    combinationIndex = counterView?.text.toString().toInt()
+                    seconds = secondsView?.text.toString().toLong()
+
+                    Log.i(TAG, counterView?.text.toString() + ", " + secondsView?.text.toString())
+                    dialog.dismiss()
+                }
+                .setNegativeButton("Cancel") { dialog, id ->
+                    // User cancelled the dialog, do nothing
+                    dialog.cancel()
+                }
+            // Create the AlertDialog
+            builder.create()
+        }
+
+
+        fab.setOnClickListener { view ->
+            // open dialog box to set saving parameters
+            alertDialog?.show()
+        }
+
         // Build list of devices
         val defaultModelIndex = 0
         deviceStrings.add(cpu)
@@ -256,23 +292,6 @@ class MainFragment : Fragment() {
             ) {
                 // Should return
             } else {
-                // Save battery level to file
-                batteryPctTo = batteryStatus!!.let { intent ->
-                    val level: Int = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
-                    val scale: Int = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-                    level / scale.toFloat()
-                }
-
-                FileOutputStream(batteryFile, true).bufferedWriter().use { out ->
-                    out.append(batteryTsFrom.toString() + " ")
-                    out.append(System.currentTimeMillis().toString() + " ")
-                    out.append(batteryPctFrom.toString() + " ")
-                    out.append(batteryPctTo.toString() + " ")
-                    out.append( (if (currentModel != -1) modelStrings[currentModel] else "none") + " ")
-                    out.append( (if (currentDevice != -1) deviceStrings[currentDevice] else "none") + " ")
-                    out.appendln(currentNumThreads.toString())
-                }
-
                 currentModel = modelIndex
                 currentDevice = deviceIndex
                 currentNumThreads = numThreads
@@ -288,6 +307,23 @@ class MainFragment : Fragment() {
                 val device = deviceStrings.get(deviceIndex)
 
                 Log.i(TAG, "Changing model to $model device $device")
+
+                // Save battery level to file
+                batteryPctTo = batteryStatus!!.let { intent ->
+                    val level: Int = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+                    val scale: Int = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+                    level / scale.toFloat()
+                }
+
+                FileOutputStream(batteryFile, true).bufferedWriter().use { out ->
+                    out.append(batteryTsFrom.toString() + " ")
+                    out.append(System.currentTimeMillis().toString() + " ")
+                    out.append(batteryPctFrom.toString() + " ")
+                    out.append(batteryPctTo.toString() + " ")
+                    out.append( (if (currentModel != -1) model else "none") + " ")
+                    out.append( (if (currentDevice != -1) device else "none") + " ")
+                    out.appendln(currentNumThreads.toString())
+                }
 
                 // Try to load model.
                 try {
@@ -361,7 +397,6 @@ class MainFragment : Fragment() {
 
             bitmap.recycle()
             showToast(textToShow)
-            //backgroundHandler.postDelayed(changeModel, 2000)
         }
 
     }
@@ -374,48 +409,61 @@ class MainFragment : Fragment() {
         // Start the classification
         synchronized(lock) {
             runClassifier = true
+
+
         }
         backgroundHandler.post(periodicClassify)
-
+        backgroundHandler.post(changeModel)
     }
 
     private val changeModel: Runnable = run {
         Runnable {
 
-            // Change model, device, threads to cover all combinations
-            if (currentNumThreads > -1 && currentDevice > -1 && currentModel > -1) {
-                var cnt = 0
-                var mposNew = -1
-                var dposNew = -1
-                var tposNew = -1
-                for (i in 0 until nThreads)
-                    for (j in 0 until modelStrings.size)
-                        for (k in 0 until deviceStrings.size) {
-                            if (cnt == combinationIndex) {
-                                tposNew = i
-                                mposNew = j
-                                dposNew = k
+            synchronized(lock) {
+                // Change model, device, threads to cover all combinations
+                if (currentNumThreads > -1 && currentDevice > -1 && currentModel > -1) {
+                    var cnt = 0
+                    var mposNew = -1
+                    var dposNew = -1
+                    var tposNew = -1
+                    var stop = false
+                    for (i in 0 until deviceStrings.size) {
+                        for (j in 0 until nThreads) {
+                            for (k in 0 until modelStrings.size) {
+                                if (cnt == combinationIndex) {
+                                    tposNew = j
+                                    mposNew = k
+                                    dposNew = i
+                                    stop = true
+                                    combinationIndex++
+                                    break
+                                }
+                                cnt++
                             }
-                            cnt++
+                            if (stop)
+                                break
                         }
+                        if (stop)
+                            break
+                    }
+                    Log.i(TAG, "*****************CHANGED TO MODEL: threads=" + (tposNew+1) + ", model=" + modelStrings[mposNew] + ", device=" + deviceStrings[dposNew])
 
-                activity?.runOnUiThread(Runnable {
-                    np.value = tposNew + 1
-                    modelView.performItemClick(
-                        modelView.getChildAt(mposNew), mposNew,
-                        modelView.adapter.getItemId(mposNew)
-                    )
-                    deviceView.performItemClick(
-                        deviceView.getChildAt(dposNew), dposNew,
-                        deviceView.adapter.getItemId(dposNew)
-                    )
-                })
 
-                combinationIndex++
+                    activity?.runOnUiThread(Runnable {
+                        np.value = tposNew + 1
+                        modelView.performItemClick(
+                            modelView.getChildAt(mposNew), mposNew,
+                            modelView.adapter.getItemId(mposNew)
+                        )
+                        deviceView.performItemClick(
+                            deviceView.getChildAt(dposNew), dposNew,
+                            deviceView.adapter.getItemId(dposNew)
+                        )
+                    })
+                }
+
+                backgroundHandler.postDelayed(changeModel, seconds * 1000)
             }
-
-
-            backgroundHandler.postDelayed(changeModel, 10000)
         }
     }
 
@@ -486,9 +534,11 @@ class MainFragment : Fragment() {
 
     // Handles several lifecycle events on the textureView
     private val surfaceTextureListener = object: TextureView.SurfaceTextureListener {
-        override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture?, width: Int, height: Int) {
-            TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
-        }
+        //override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture?, width: Int, height: Int) {
+            //TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        //}
+
+        override fun onSurfaceTextureSizeChanged(surface: SurfaceTexture?, width: Int, height: Int) = Unit
 
         override fun onSurfaceTextureUpdated(surface: SurfaceTexture?) = Unit
 
@@ -572,7 +622,7 @@ class MainFragment : Fragment() {
       * @param text The message to show
       */
     private fun showToast(s: CharSequence) {
-        Toast.makeText(context, s, Toast.LENGTH_SHORT).show()
+        //Toast.makeText(context, s, Toast.LENGTH_SHORT).show()
 
         activity!!.runOnUiThread {
             textView?.setText(s, TextView.BufferType.SPANNABLE)

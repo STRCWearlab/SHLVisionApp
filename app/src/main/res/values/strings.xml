@@ -16,4 +16,7 @@
     <string name="help">Help</string>
     <string name="about">About</string>
     <string name="external_request_rationale">Access to external storage is required</string>
+    <string name="counter">Counter</string>
+    <string name="minutes">Seconds</string>
+    <string name="saving_parameters">Saving parameters</string>
 </resources>

@@ -24,7 +24,7 @@ class AboutDialog : DialogFragment() {
             // Pass null as the parent view because its going in the dialog layout
             val view = inflater.inflate(uk.wearlab.activityrecognition.R.layout.about_dialog, null)
 
-            Log.d("TAG", "ASSETS filessssssssssssss  ----------------------------------")
+            Log.i("TAG", "ASSETS files")
             val markdownView = view.findViewById<MarkdownView>(R.id.markdownView)
             val markdownContent = readFile("test.md")
             markdownView.loadMarkdown(markdownContent)
